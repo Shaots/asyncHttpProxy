@@ -8,41 +8,40 @@ using namespace std::string_view_literals;
 using Callback = std::function<void(std::string_view, std::string_view)>;
 
 void iterHeaders(std::string_view req, Callback &&callback) {
-    size_t pos = req.find("\r\n");
-    if (pos == std::string_view::npos) {
-        return;
-    }
+    auto lines = req | std::views::split("\r\n"sv);
 
-    // Пропускаем request line и начинаем с headers
-    size_t start = pos + 2;  // +2 для пропуска \r\n
+    bool skip_request_line = true;
 
-    while (start < req.length()) {
-        size_t end = req.find("\r\n", start);
-        if (end == std::string_view::npos) {
+    for (auto line_range : lines) {
+        std::string_view line(line_range.begin(), line_range.end());
+
+        if (line.empty()) {
             break;
         }
 
-        if (end == start) {
-            break;
+        if (skip_request_line) {
+            skip_request_line = false;
+            continue;
         }
 
-        std::string_view header_line = req.substr(start, end - start);
-
-        size_t colon_pos = header_line.find(':');
-        if (colon_pos != std::string_view::npos) {
-            std::string_view name = header_line.substr(0, colon_pos);
-
-            size_t value_start = colon_pos + 1;
-            while (value_start < header_line.length() &&
-                   std::isspace(static_cast<unsigned char>(header_line[value_start]))) {
-                value_start++;
-            }
-            std::string_view value = header_line.substr(value_start);
-
-            callback(name, value);
+        auto colon_pos = line.find(':');
+        if (colon_pos == std::string_view::npos) {
+            continue;
         }
 
-        start = end + 2;
+        std::string_view name = line.substr(0, colon_pos);
+
+        std::string_view value = line.substr(colon_pos + 1);
+        auto value_start =
+            std::ranges::find_if(value, [](char c) { return !std::isspace(static_cast<unsigned char>(c)); });
+
+        if (value_start != value.end()) {
+            value = std::string_view(&*value_start, std::distance(value_start, value.end()));
+        } else {
+            value = ""sv;
+        }
+
+        callback(name, value);
     }
 }
 
@@ -50,22 +49,23 @@ std::pair<std::string, std::string> findHostPort(std::string_view req) {
     std::string host;
     std::string port = "80";  // default HTTP port
 
-    const std::string_view host_header = "host";
     iterHeaders(req, [&](std::string_view name, std::string_view value) {
-        if (name.length() == host_header.length()) {
-            std::string name_lower;
-            name_lower.reserve(name.length());
-            std::transform(name.begin(), name.end(), std::back_inserter(name_lower),
-                           [](unsigned char c) { return std::tolower(c); });
-            if (name_lower == host_header) {
-                std::string host_value(value);
+        auto name_lower =
+            name | std::views::transform([](char c) { return std::tolower(static_cast<unsigned char>(c)); });
 
-                size_t colon_pos = host_value.find(':');
-                if (colon_pos != std::string::npos) {
-                    host = host_value.substr(0, colon_pos);
-                    port = host_value.substr(colon_pos + 1);
-                } else {
-                    host = host_value;
+        std::string name_lower_str(name_lower.begin(), name_lower.end());
+
+        if (name_lower_str == "host") {
+            auto host_parts = value | std::views::split(':');
+
+            auto it = host_parts.begin();
+            if (it != host_parts.end()) {
+                std::string_view host_range(*it);
+                host = std::string(host_range.begin(), host_range.end());
+
+                if (++it != host_parts.end()) {
+                    std::string_view port_range(*it);
+                    port = std::string(port_range.begin(), port_range.end());
                 }
             }
         }
@@ -76,21 +76,19 @@ std::pair<std::string, std::string> findHostPort(std::string_view req) {
 
 std::optional<size_t> findContentLength(std::string_view rsp) {
     std::optional<size_t> result;
-    const std::string_view content_length_header = "content-length";
+
     iterHeaders(rsp, [&](std::string_view name, std::string_view value) {
-        if (name.length() == content_length_header.length()) {
-            std::string name_lower;
-            name_lower.reserve(name.length());
-            std::transform(name.begin(), name.end(), std::back_inserter(name_lower),
-                           [](unsigned char c) { return std::tolower(c); });
-            if (name_lower == content_length_header) {
-                try {
-                    result = std::stoul(std::string(value));
-                } catch (const std::exception &) {
-                }
+        auto name_lower =
+            name | std::views::transform([](char c) { return std::tolower(static_cast<unsigned char>(c)); });
+
+        std::string name_lower_str(name_lower.begin(), name_lower.end());
+
+        if (name_lower_str == "content-length") {
+            try {
+                result = std::stoul(std::string(value));
+            } catch (const std::exception &) {
             }
         }
     });
-
     return result;
 }
