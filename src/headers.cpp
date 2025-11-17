@@ -66,16 +66,39 @@ std::pair<std::string, std::string> findHostPort(std::string_view req) {
 std::optional<size_t> findContentLength(std::string_view rsp) {
     std::optional<size_t> result;
 
-    iterHeaders(rsp, [&](std::string_view name, std::string_view value) {
-        auto name_lower =
-            name | std::views::transform([](char c) { return std::tolower(static_cast<unsigned char>(c)); });
-
-        std::string name_lower_str(name_lower.begin(), name_lower.end());
-
-        if (name_lower_str == "content-length") {
+    iterHeaders(rsp, [&](std::string_view name_lower, std::string_view value) {
+        if (name_lower == "content-length") {
+            constexpr size_t MAX_CONTENT_LENGTH_DIGITS = 20;
+            constexpr size_t MAX_REASONABLE_CONTENT_LENGTH = 10ULL * 1024 * 1024 * 1024;
+            if (value.size() > MAX_CONTENT_LENGTH_DIGITS) {
+                return;
+            }
             try {
-                result = std::stoul(std::string(value));
-            } catch (const std::exception &) {
+                auto digits =
+                    value | std::views::take_while([](char c) { return std::isdigit(static_cast<unsigned char>(c)); }) |
+                    std::views::common;
+
+                if (digits.empty()) {
+                    return;
+                }
+
+                std::string number_str(digits.begin(), digits.end());
+                if (number_str.size() != value.size()) {
+                    return;
+                }
+
+                size_t content_length = std::stoul(number_str);
+                if (content_length <= MAX_REASONABLE_CONTENT_LENGTH) {
+                    result = content_length;
+                } else {
+                    std::cerr << "Warning: Content-Length too large: " << content_length << std::endl;
+                }
+            } catch (const std::out_of_range &) {
+                std::cerr << "Warning: Content-Length out of range: " << value << std::endl;
+            } catch (const std::invalid_argument &) {
+                std::cerr << "Warning: Invalid Content-Length: " << value << std::endl;
+            } catch (const std::exception &e) {
+                std::cerr << "Warning: Error parsing Content-Length '" << value << "': " << e.what() << std::endl;
             }
         }
     });

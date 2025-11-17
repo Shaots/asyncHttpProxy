@@ -133,3 +133,43 @@ TEST(findContentLength, NoContentLength) {
 
     EXPECT_FALSE(length.has_value());
 }
+
+TEST(findContentLength, ReasonableSize) {
+    std::string reasonable_sizes[] = {
+        "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n",
+        "HTTP/1.1 200 OK\r\nContent-Length: 1024\r\n\r\n",
+        "HTTP/1.1 200 OK\r\nContent-Length: 1048576\r\n\r\n",     // 1MB
+        "HTTP/1.1 200 OK\r\nContent-Length: 1073741824\r\n\r\n",  // 1GB
+    };
+
+    size_t expected[4] = {0, 1024, 1048576, 1073741824};
+
+    for (int i = 0; i < 4; ++i) {
+        auto length = findContentLength(reasonable_sizes[i]);
+        EXPECT_TRUE(length.has_value());
+        EXPECT_EQ(length.value(), expected[i]);
+    }
+}
+
+TEST(findContentLength, Unreasonable) {
+    std::string long_content_length = "HTTP/1.1 200 OK\r\n"
+                                      "Content-Length: 999999999999999999999999999999\r\n"  // 30 digits
+                                      "\r\n";
+
+    auto length1 = findContentLength(long_content_length);
+    EXPECT_FALSE(length1.has_value());
+
+    std::string invalid_content_length = "HTTP/1.1 200 OK\r\n"
+                                         "Content-Length: 123abc\r\n"
+                                         "\r\n";
+
+    auto length2 = findContentLength(invalid_content_length);
+    EXPECT_FALSE(length2.has_value());
+
+    std::string negative_content_length = "HTTP/1.1 200 OK\r\n"
+                                          "Content-Length: -100\r\n"
+                                          "\r\n";
+
+    auto length3 = findContentLength(negative_content_length);
+    EXPECT_FALSE(length3.has_value());
+}
