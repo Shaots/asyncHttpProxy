@@ -108,8 +108,8 @@ awaitable<void> session(tcp::socket client_socket, io_service &io_service) {
             std::size_t total_body_received = 0;
 
             while (total_body_received < response_body_size) {
-                std::size_t bytes_to_read =
-                    std::min(static_cast<std::size_t>(4096), response_body_size - total_body_received);
+                std::size_t max_read_bytes = 4096;
+                std::size_t bytes_to_read = std::min(max_read_bytes, response_body_size - total_body_received);
 
                 boost::asio::streambuf chunk_buf;
                 std::size_t bytes_read =
