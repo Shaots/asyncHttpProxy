@@ -8,39 +8,30 @@ using namespace std::string_view_literals;
 using Callback = std::function<void(std::string_view, std::string_view)>;
 
 void iterHeaders(std::string_view req, Callback &&callback) {
-    auto lines = req | std::views::split("\r\n"sv);
+    auto headers =
+        req | std::views::split("\r\n"sv) |
+        std::views::transform([](auto line_range) { return std::string_view(line_range.begin(), line_range.end()); }) |
+        std::views::drop(1) | std::views::take_while([](std::string_view line) { return !line.empty(); }) |
+        std::views::filter([](std::string_view line) { return line.find(':') != std::string_view::npos; }) |
+        std::views::transform([](std::string_view line) {
+            auto colon_pos = line.find(':');
+            std::string_view name = line.substr(0, colon_pos);
 
-    bool skip_request_line = true;
+            std::string_view value = line.substr(colon_pos + 1);
+            auto value_trimmed =
+                value | std::views::drop_while([](char c) { return std::isspace(static_cast<unsigned char>(c)); });
 
-    for (auto line_range : lines) {
-        std::string_view line(line_range.begin(), line_range.end());
+            if (value_trimmed.begin() != value_trimmed.end()) {
+                value = std::string_view(&*value_trimmed.begin(),
+                                         std::distance(value_trimmed.begin(), value_trimmed.end()));
+            } else {
+                value = ""sv;
+            }
 
-        if (line.empty()) {
-            break;
-        }
+            return std::make_pair(name, value);
+        });
 
-        if (skip_request_line) {
-            skip_request_line = false;
-            continue;
-        }
-
-        auto colon_pos = line.find(':');
-        if (colon_pos == std::string_view::npos) {
-            continue;
-        }
-
-        std::string_view name = line.substr(0, colon_pos);
-
-        std::string_view value = line.substr(colon_pos + 1);
-        auto value_start =
-            std::ranges::find_if(value, [](char c) { return !std::isspace(static_cast<unsigned char>(c)); });
-
-        if (value_start != value.end()) {
-            value = std::string_view(&*value_start, std::distance(value_start, value.end()));
-        } else {
-            value = ""sv;
-        }
-
+    for (auto [name, value] : headers) {
         callback(name, value);
     }
 }
