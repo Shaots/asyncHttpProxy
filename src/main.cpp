@@ -108,7 +108,7 @@ awaitable<void> session(tcp::socket client_socket, io_service &io_service) {
             std::size_t total_body_received = 0;
 
             while (total_body_received < response_body_size) {
-                std::size_t max_read_bytes = 4096;
+                constexpr std::size_t max_read_bytes = 4096;
                 std::size_t bytes_to_read = std::min(max_read_bytes, response_body_size - total_body_received);
 
                 boost::asio::streambuf chunk_buf;
@@ -148,7 +148,8 @@ awaitable<void> session(tcp::socket client_socket, io_service &io_service) {
 
                 total_transferred += bytes_read;
 
-                if (total_transferred % (100 * 1024) == 0) {  // Каждые 100KB
+                constexpr std::size_t hundredKB = 102400;
+                if (total_transferred % hundredKB == 0) {
                     std::println("Chunked transfer: {} bytes so far", total_transferred);
                 }
             }
