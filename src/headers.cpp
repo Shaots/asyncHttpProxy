@@ -28,7 +28,10 @@ void iterHeaders(std::string_view req, Callback &&callback) {
                 value = ""sv;
             }
 
-            return std::make_pair(name, value);
+            auto name_lower_range =
+                name | std::views::transform([](char c) { return std::tolower(static_cast<unsigned char>(c)); });
+            std::string name_lower(name_lower_range.begin(), name_lower_range.end());
+            return std::make_pair(name_lower, value);
         });
 
     for (auto [name, value] : headers) {
@@ -40,13 +43,8 @@ std::pair<std::string, std::string> findHostPort(std::string_view req) {
     std::string host;
     std::string port = "80";  // default HTTP port
 
-    iterHeaders(req, [&](std::string_view name, std::string_view value) {
-        auto name_lower =
-            name | std::views::transform([](char c) { return std::tolower(static_cast<unsigned char>(c)); });
-
-        std::string name_lower_str(name_lower.begin(), name_lower.end());
-
-        if (name_lower_str == "host") {
+    iterHeaders(req, [&](std::string_view name_lower, std::string_view value) {
+        if (name_lower == "host") {
             auto host_parts = value | std::views::split(':');
 
             auto it = host_parts.begin();

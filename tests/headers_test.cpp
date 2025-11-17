@@ -19,7 +19,7 @@ TEST(iterHeaders, SkipRequestLine) {
     });
 
     EXPECT_EQ(headers.size(), 1);
-    EXPECT_EQ(headers[0], "Host: example.com");
+    EXPECT_EQ(headers[0], "host: example.com");
 }
 
 TEST(iterHeaders, SingleHeader) {
@@ -33,7 +33,7 @@ TEST(iterHeaders, SingleHeader) {
 
     EXPECT_EQ(names.size(), 1);
     EXPECT_EQ(values.size(), 1);
-    EXPECT_EQ(names[0], "Content-Type");
+    EXPECT_EQ(names[0], "content-type");
     EXPECT_EQ(values[0], "text/html");
 }
 
@@ -49,9 +49,9 @@ TEST(iterHeaders, MultipleHeaders) {
     iterHeaders(request, [&](std::string_view name, std::string_view value) { names.push_back(std::string(name)); });
 
     EXPECT_EQ(names.size(), 3);
-    EXPECT_EQ(names[0], "Host");
-    EXPECT_EQ(names[1], "User-Agent");
-    EXPECT_EQ(names[2], "Accept");
+    EXPECT_EQ(names[0], "host");
+    EXPECT_EQ(names[1], "user-agent");
+    EXPECT_EQ(names[2], "accept");
 }
 
 TEST(iterHeaders, MultipleSameHeaders) {
@@ -64,7 +64,7 @@ TEST(iterHeaders, MultipleSameHeaders) {
     std::vector<std::string> values;
 
     iterHeaders(request, [&](std::string_view name, std::string_view value) {
-        if (name == "X-Custom") {
+        if (name == "x-custom") {
             values.push_back(std::string(value));
         }
     });
